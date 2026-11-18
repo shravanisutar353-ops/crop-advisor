@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My crop dashboard · Crop Advisor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <div>
+      <h1>My crop dashboard</h1>
+      <p id="who" style="margin:0"></p>
+    </div>
+    <button class="ghost" id="logout" type="button">Log out</button>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Your details</h2>
+      <form id="profile" novalidate>
+        <div class="fields">
+          <label class="full">Full name <input type="text" id="full_name"></label>
+          <label>Latitude <input type="number" id="latitude" step="any" required></label>
+          <label>Longitude <input type="number" id="longitude" step="any" required></label>
+        </div>
+        <div class="actions">
+          <button class="ghost" type="button" id="locate">Use my location</button>
+        </div>
+
+        <h2 class="sub">Soil</h2>
+        <div class="fields">
+          <label>Nitrogen N <span>kg/ha</span> <input type="number" id="N" step="any" min="0" required></label>
+          <label>Phosphorus P <span>kg/ha</span> <input type="number" id="P" step="any" min="0" required></label>
+          <label>Potassium K <span>kg/ha</span> <input type="number" id="K" step="any" min="0" required></label>
+          <label>Soil pH <span>0–14</span> <input type="number" id="ph" step="any" min="0" max="14" required></label>
+        </div>
+
+        <h2 class="sub">Crop</h2>
+        <label class="full">Crop you're growing
+          <select id="crop">
+            <option value="rice">Rice</option>
+            <option value="maize">Maize</option>
+            <option value="wheat">Wheat</option>
+            <option value="cotton">Cotton</option>
+            <option value="sugarcane">Sugarcane</option>
+          </select>
+        </label>
+
+        <div class="actions">
+          <button class="primary" type="submit">Save and update</button>
+        </div>
+        <p id="msg" class="msg" hidden></p>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Current weather</h2>
+      <div id="weather" class="hint">Loading…</div>
+      <h2 class="sub">Best crops for you</h2>
+      <div id="results"><p class="empty">Set your location to see matches.</p></div>
+      <p class="hint">Rainfall is the total over the last 90 days. Matches are based on illustrative ranges, not agronomic advice.</p>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="scoring.js"></script>
+<script>
+  let weather = null; // { temperature, humidity, rainfall }
+  const msg = document.getElementById("msg");
+  const $ = (id) => document.getElementById(id);
+
+  function showMsg(text, isError = false) {
+    msg.textContent = text;
+    msg.className = isError ? "msg error" : "msg";
+    msg.hidden = false;
+  }
+
+  function fillForm(p) {
+    $("full_name").value = p.full_name ?? "";
+    $("latitude").value = p.latitude ?? "";
+    $("longitude").value = p.longitude ?? "";
+    $("N").value = p.n ?? "";
+    $("P").value = p.p ?? "";
+    $("K").value = p.k ?? "";
+    $("ph").value = p.ph ?? "";
+    if (p.crop) $("crop").value = p.crop;
+  }
+
+  async function refreshWeather(lat, lon) {
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+                  `&current=temperature_2m,relative_humidity_2m&daily=precipitation_sum&past_days=90&forecast_days=1&timezone=auto`;
+      const data = await (await fetch(url)).json();
+      const rain = data.daily.precipitation_sum
+        .filter((v) => v != null)
+        .reduce((a, b) => a + b, 0);
+      weather = {
+        temperature: data.current.temperature_2m,
+        humidity: data.current.relative_humidity_2m,
+        rainfall: Math.round(rain)
+      };
+      $("weather").textContent =
+        `Temperature ${weather.temperature}°C · Humidity ${weather.humidity}% · Rainfall (last 90 days) ${weather.rainfall} mm`;
+    } catch {
+      weather = null;
+      $("weather").textContent = "Could not load weather for this location.";
+    }
+  }
+
+  function renderResults() {
+    const el = $("results");
+    const N = parseFloat($("N").value), P = parseFloat($("P").value);
+    const K = parseFloat($("K").value), ph = parseFloat($("ph").value);
+    if (!weather || [N, P, K, ph].some((v) => !Number.isFinite(v))) {
+      el.innerHTML = '<p class="empty">Fill in your location and soil values to see matches.</p>';
+      return;
+    }
+    const inputs = { N, P, K, ph, ...weather };
+    const top = scoreCrops(inputs).slice(0, 3);
+    el.innerHTML = '<ol class="result-list">' + top.map((r, i) => {
+      const pct = Math.round(r.score * 100);
+      return `<li>
+        <div class="row"><span class="crop">${i + 1}. ${r.crop}</span><span class="pct">${pct}% match</span></div>
+        <div class="bar" role="img" aria-label="${r.crop} match ${pct} percent"><i style="width:${pct}%"></i></div>
+      </li>`;
+    }).join("") + "</ol>";
+  }
+
+  // Page load: require login, load saved profile, fetch weather, show matches.
+  (async () => {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return (location.href = "login.html");
+
+    const user = session.user;
+    $("who").textContent = user.email;
+
+    const { data: profile, error } = await sb.from("profiles")
+      .select("*").eq("id", user.id).maybeSingle();
+    if (error) showMsg(error.message, true);
+    if (profile) {
+      fillForm(profile);
+      if (profile.latitude != null) await refreshWeather(profile.latitude, profile.longitude);
+    }
+    if (!weather) $("weather").textContent = "Set your location to see weather.";
+    renderResults();
+  })();
+
+  $("logout").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    location.href = "login.html";
+  });
+
+  $("locate").addEventListener("click", () => {
+    if (!navigator.geolocation) return showMsg("Your browser can't share location.", true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        $("latitude").value = pos.coords.latitude.toFixed(4);
+        $("longitude").value = pos.coords.longitude.toFixed(4);
+        showMsg("Location filled in. Press Save to update.");
+      },
+      () => showMsg("Location permission was denied.", true)
+    );
+  });
+
+  $("profile").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return (location.href = "login.html");
+
+    const lat = parseFloat($("latitude").value);
+    const lon = parseFloat($("longitude").value);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return showMsg("Enter a valid location.", true);
+
+    const row = {
+      id: user.id,
+      full_name: $("full_name").value.trim(),
+      latitude: lat,
+      longitude: lon,
+      crop: $("crop").value,
+      n: parseFloat($("N").value),
+      p: parseFloat($("P").value),
+      k: parseFloat($("K").value),
+      ph: parseFloat($("ph").value),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await sb.from("profiles").upsert(row);
+    if (error) return showMsg(error.message, true);
+
+    await refreshWeather(lat, lon);
+    renderResults();
+    showMsg("Saved.");
+  });
+</script>
+</body>
+</html>

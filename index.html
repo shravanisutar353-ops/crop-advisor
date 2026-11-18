@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Crop Advisor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:wght@400;600&display=swap">
+<style>
+:root {
+  --bg: #f5f2ea;
+  --surface: #ffffff;
+  --fg: #1f2a1f;
+  --muted: #5d6b5a;
+  --line: #d9d4c4;
+  --accent: #2f6b3a;
+  --accent-fg: #ffffff;
+  --warn: #8a5a12;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14190f;
+    --surface: #1d2418;
+    --fg: #e8ecdf;
+    --muted: #a3ad98;
+    --line: #36402d;
+    --accent: #8cc98f;
+    --accent-fg: #14190f;
+    --warn: #e0b56a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14190f;
+  --surface: #1d2418;
+  --fg: #e8ecdf;
+  --muted: #a3ad98;
+  --line: #36402d;
+  --accent: #8cc98f;
+  --accent-fg: #14190f;
+  --warn: #e0b56a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 16px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: 24px;
+  padding-bottom: 32px;
+}
+.wrap { max-width: 980px; margin: 0 auto; }
+header h1 {
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 600;
+  margin: 0 0 6px;
+  text-wrap: balance;
+}
+header p { margin: 0 0 24px; color: var(--muted); max-width: 62ch; }
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 720px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+  min-width: 0;
+}
+.card h2 {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 14px;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+@media (max-width: 420px) { .fields { grid-template-columns: minmax(0, 1fr); } }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); min-width: 0; }
+label span.unit { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; }
+input[type="number"] {
+  font: inherit;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 16px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 10px;
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+input[type="number"]:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+button {
+  font: inherit;
+  font-size: 15px;
+  border-radius: 6px;
+  padding: 10px 16px;
+  cursor: pointer;
+  border: 1px solid var(--accent);
+}
+button.primary { background: var(--accent); color: var(--accent-fg); }
+button.ghost { background: transparent; color: var(--accent); }
+.result-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.result-list li { display: grid; gap: 6px; }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; min-width: 0; }
+.crop { font-size: 20px; font-weight: 600; text-transform: capitalize; }
+.pct { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; color: var(--muted); }
+.bar { height: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .4s ease; }
+.hint { font-size: 14px; color: var(--muted); margin: 0; }
+.notes { margin-top: 18px; font-size: 14px; color: var(--muted); }
+.warn { color: var(--warn); }
+.empty { color: var(--muted); font-style: italic; margin: 0; }
+[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Crop Advisor</h1>
+    <p>Enter soil nutrients and local weather to see which crops fit those conditions best.</p>
+  </header>
+
+  <div class="grid">
+    <section class="card" aria-labelledby="inputs-h">
+      <h2 id="inputs-h">Conditions</h2>
+      <form id="form" novalidate>
+        <div class="fields">
+          <label for="N">Nitrogen N <span class="unit">kg/ha</span>
+            <input type="number" id="N" step="any" min="0" value="90"></label>
+          <label for="P">Phosphorus P <span class="unit">kg/ha</span>
+            <input type="number" id="P" step="any" min="0" value="42"></label>
+          <label for="K">Potassium K <span class="unit">kg/ha</span>
+            <input type="number" id="K" step="any" min="0" value="43"></label>
+          <label for="temperature">Temperature <span class="unit">°C</span>
+            <input type="number" id="temperature" step="any" value="21"></label>
+          <label for="humidity">Humidity <span class="unit">%</span>
+            <input type="number" id="humidity" step="any" min="0" max="100" value="82"></label>
+          <label for="ph">Soil pH <span class="unit">0–14</span>
+            <input type="number" id="ph" step="any" min="0" max="14" value="6.5"></label>
+          <label for="rainfall">Rainfall <span class="unit">mm</span>
+            <input type="number" id="rainfall" step="any" min="0" value="200"></label>
+        </div>
+        <div class="actions">
+          <button class="primary" type="submit">Recommend crops</button>
+          <button class="ghost" type="button" id="reset">Reset example</button>
+        </div>
+        <p class="hint" id="error" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="result-h" aria-live="polite">
+      <h2 id="result-h">Top matches</h2>
+      <div id="results"><p class="empty">Enter conditions and press “Recommend crops”.</p></div>
+      <p class="notes">Match scores show how closely your inputs fall within each crop’s typical range. The ranges are illustrative, not agronomic advice; check local extension services before planting.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+// Typical growing ranges per crop: [low, high] for each factor.
+const CROPS = {
+  rice:      { N: [80, 120], P: [35, 60],  K: [35, 45], temperature: [20, 27], humidity: [80, 90], ph: [5.5, 7.0], rainfall: [180, 300] },
+  maize:     { N: [70, 100], P: [40, 60],  K: [15, 25], temperature: [18, 27], humidity: [55, 70], ph: [5.8, 7.0], rainfall: [60, 110] },
+  wheat:     { N: [50, 90],  P: [40, 60],  K: [15, 25], temperature: [12, 22], humidity: [50, 65], ph: [6.0, 7.5], rainfall: [50, 100] },
+  cotton:    { N: [100, 140], P: [15, 30], K: [15, 25], temperature: [22, 32], humidity: [50, 70], ph: [6.0, 8.0], rainfall: [60, 120] },
+  sugarcane: { N: [90, 130], P: [15, 30],  K: [40, 55], temperature: [25, 35], humidity: [70, 85], ph: [6.0, 7.5], rainfall: [150, 250] }
+};
+const FACTORS = ["N", "P", "K", "temperature", "humidity", "ph", "rainfall"];
+const EXAMPLE = { N: 90, P: 42, K: 43, temperature: 21, humidity: 82, ph: 6.5, rainfall: 200 };
+
+// Score one factor: 1 inside the range, falling linearly to 0 at one range-width outside it.
+function factorScore(value, [lo, hi]) {
+  if (value >= lo && value <= hi) return 1;
+  const width = hi - lo;
+  const gap = value < lo ? lo - value : value - hi;
+  return Math.max(0, 1 - gap / width);
+}
+
+function scoreCrops(inputs) {
+  return Object.entries(CROPS)
+    .map(([crop, ranges]) => {
+      const total = FACTORS.reduce((sum, f) => sum + factorScore(inputs[f], ranges[f]), 0);
+      return { crop, score: total / FACTORS.length };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function readInputs() {
+  const out = {};
+  for (const f of FACTORS) {
+    const raw = $(f).value.trim();
+    const v = Number(raw);
+    if (raw === "" || !Number.isFinite(v)) throw new Error(`Enter a number for ${f === "ph" ? "soil pH" : f}.`);
+    out[f] = v;
+  }
+  if (out.ph < 0 || out.ph > 14) throw new Error("Soil pH must be between 0 and 14.");
+  if (out.humidity < 0 || out.humidity > 100) throw new Error("Humidity must be between 0 and 100%.");
+  return out;
+}
+
+function render(results) {
+  const top = results.slice(0, 3);
+  if (top.every((r) => r.score === 0)) {
+    $("results").innerHTML = '<p class="empty">None of the crops match these conditions well. Try values closer to typical field conditions.</p>';
+    return;
+  }
+  $("results").innerHTML = '<ol class="result-list">' + top.map((r, i) => {
+    const pct = Math.round(r.score * 100);
+    return `<li>
+      <div class="row"><span class="crop">${i + 1}. ${esc(r.crop)}</span><span class="pct">${pct}% match</span></div>
+      <div class="bar" role="img" aria-label="${esc(r.crop)} match ${pct} percent"><i style="width:${pct}%"></i></div>
+    </li>`;
+  }).join("") + "</ol>";
+}
+
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  try {
+    $("error").hidden = true;
+    render(scoreCrops(readInputs()));
+  } catch (err) {
+    $("error").textContent = err.message;
+    $("error").className = "hint warn";
+    $("error").hidden = false;
+  }
+});
+
+$("reset").addEventListener("click", () => {
+  for (const f of FACTORS) $(f).value = EXAMPLE[f];
+  $("error").hidden = true;
+  render(scoreCrops(EXAMPLE));
+});
+
+$("reset").click();
+</script>
+</body>
+</html>

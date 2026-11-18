@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Log in · Crop Advisor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap narrow">
+  <header>
+    <h1>Log in</h1>
+    <p>Log in with your verified email.</p>
+  </header>
+  <section class="card">
+    <form id="form" class="stack">
+      <label>Email <input type="email" id="email" autocomplete="email" required></label>
+      <label>Password <input type="password" id="password" autocomplete="current-password" required></label>
+      <div class="actions"><button class="primary" type="submit">Log in</button></div>
+    </form>
+    <p id="msg" class="msg" hidden></p>
+    <p class="hint">No account yet? <a href="register.html">Register</a></p>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+  const form = document.getElementById("form");
+  const msg = document.getElementById("msg");
+
+  function showMsg(text, isError = false) {
+    msg.textContent = text;
+    msg.className = isError ? "msg error" : "msg";
+    msg.hidden = false;
+  }
+
+  // If already logged in (including right after clicking the verification link), go to the dashboard.
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) location.href = "dashboard.html";
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      const text = error.message.toLowerCase().includes("not confirmed")
+        ? "Please verify your email first. Check your inbox for the link."
+        : error.message;
+      return showMsg(text, true);
+    }
+    location.href = "dashboard.html";
+  });
+</script>
+</body>
+</html>

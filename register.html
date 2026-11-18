@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Register · Crop Advisor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap narrow">
+  <header>
+    <h1>Create account</h1>
+    <p>Use a real email address. We'll send you a verification link.</p>
+  </header>
+  <section class="card">
+    <form id="form" class="stack">
+      <label>Email <input type="email" id="email" autocomplete="email" required></label>
+      <label>Password (at least 6 characters) <input type="password" id="password" minlength="6" autocomplete="new-password" required></label>
+      <div class="actions"><button class="primary" type="submit">Register</button></div>
+    </form>
+    <p id="msg" class="msg" hidden></p>
+    <p class="hint">Already registered? <a href="login.html">Log in</a></p>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+  const form = document.getElementById("form");
+  const msg = document.getElementById("msg");
+
+  function showMsg(text, isError = false) {
+    msg.textContent = text;
+    msg.className = isError ? "msg error" : "msg";
+    msg.hidden = false;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    const { error } = await sb.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: SITE_URL + "/login.html" }
+    });
+
+    if (error) return showMsg(error.message, true);
+    form.reset();
+    showMsg("Account created. Check your email and click the verification link, then log in.");
+  });
+</script>
+</body>
+</html>
